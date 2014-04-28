@@ -9,16 +9,27 @@ import (
 	"errors"
 	"strings"
 	"os/exec"
+    "text/template"
 )
 
+type AppInfo struct {
+    Command, Version string
+}
+
+type LibraryInfo struct {
+	path         string   // 静态库文件所在路径
+	absolutePath string   // 静态库文件所在绝对路径
+	archs        []string // 静态库文件所包含的CPU架构
+}
+
 const (
-	CMD_NAME = "mergelibs"
+	CMD_NAME = "slt"
 	VERSION	= "0.1.0"
-	USAGE = `
-%v %v -- Multi-architecture static library merge tool
+	USAGE_TPL = `
+{{.Command}} {{.Version}} -- Multi-architecture static library tools
 ============================================================================
-用法:
-    mergelibs [-dhov] <input_files>
+Usage:
+    {{.Command}} [-dhov] <input_files>
     输入文件数(input_files)需大于等于2个
 
     -d: 打印调试信息
@@ -26,12 +37,12 @@ const (
     -o <output>: 指定输出文件名称，默认会在执行命令的目录生成一个名为“merged.a”的文件
     -v: 打印版本信息
 
-例如：
-    [1] mergelibs -h
-    [2] mergelibs -v
-    [3] mergelibs xxx.a yyy.a
-    [4] mergelibs -o all_in_one.a xxx.a yyy.a
-    [5] mergelibs -d -o all_in_one.a xxx.a yyy.a
+Example：
+    [1] {{.Command}} -h
+    [2] {{.Command}} -v
+    [3] {{.Command}} xxx.a yyy.a
+    [4] {{.Command}} -o all_in_one.a xxx.a yyy.a
+    [5] {{.Command}} -d -o all_in_one.a xxx.a yyy.a
 ============================================================================
 `
 	FLAG_OUTPUT_DEFAULT = "merged.a"
@@ -40,17 +51,11 @@ const (
 	FLAG_HELP_DEFAULT = false
 )
 
-type libraryInfo struct {
-	path         string   // 静态库文件所在路径
-	absolutePath string   // 静态库文件所在绝对路径
-	archs        []string // 静态库文件所包含的CPU架构
-}
-
 var flagMergedOutput string
 var flagDebug bool = FLAG_DEBUG_DEFAULT
 var flagVersion bool = FLAG_VERSION_DEFAULT
 var flagHelp bool = FLAG_HELP_DEFAULT
-var libs []libraryInfo
+var libs []LibraryInfo
 
 func init() {
 	flag.StringVar(&flagMergedOutput, "o", FLAG_OUTPUT_DEFAULT, "Output static file")
@@ -142,7 +147,7 @@ func checkInputFiles(inputs []string) bool {
 					absPath = pwd + "/" + file
 				}
 
-				libInfo := libraryInfo{
+				libInfo := LibraryInfo{
 					path:         strings.Replace(file, " ", "\\ ", -1),
 					absolutePath: strings.Replace(absPath, " ", "\\ ", -1),
 					archs:        archs,
@@ -223,7 +228,11 @@ func syncExec(command string, args ...string) (stdOutput string, err error) {
 
 // 打印使用方法
 func printUsage() {
-	fmt.Printf(USAGE, CMD_NAME ,VERSION)
+    appInfo := AppInfo{CMD_NAME, VERSION}
+    tmpl, err := template.New("usage").Parse(USAGE_TPL)
+    if nil != err {panic(err)}
+    err = tmpl.Execute(os.Stdout, appInfo)
+    if nil != err {panic(err)}
 }
 
 // 打印版本信息
