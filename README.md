@@ -1,4 +1,4 @@
-# 构静态库操作工具
+# 静态库操作工具
 
 ## 限制：
 + 输入文件必须包含相同的架构,比如都只包含armv7, armv7s, i386。否则无法合并。
@@ -13,7 +13,7 @@
 	* TODO
 
 ## 用法:
-    mergelibs [-dhov] <input_files>
+    mergelibs [-mpdhov] <input_files>
 
     -m: 工作模式
         merge       合并多架构静态库。[默认]
