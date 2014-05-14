@@ -13,7 +13,7 @@
 	* TODO
 
 ## 用法:
-    mergelibs [-mpdhov] <input_files>
+    slt [-mpdhov] <input_files>
 
     -m: 工作模式
         merge       合并多架构静态库。[默认]
