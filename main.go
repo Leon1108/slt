@@ -24,17 +24,20 @@ type LibraryInfo struct {
 
 const (
 	CMD_NAME = "slt"
-	VERSION	= "0.1.0"
+	VERSION	= "0.2.0"
 	USAGE_TPL = `
-{{.Command}} {{.Version}} -- Multi-architecture static library tools
+{{.Command}} {{.Version}} -- Static Library Tools
 ============================================================================
 Usage:
-    {{.Command}} [-dhov] <input_files>
-    输入文件数(input_files)需大于等于2个
+    {{.Command}} [-mpdhov] <input_files>
 
+    -m: 工作模式
+        merge       合并多架构静态库。[默认]
+        exclude     排除指定文件。
+    -p: Pattern 用于指定需要排除哪些文件。当工作模式为exclude时，该参数有效。
     -d: 打印调试信息
     -h: 打印帮助信息
-    -o <output>: 指定输出文件名称，默认会在执行命令的目录生成一个名为“merged.a”的文件
+    -o <output>: 指定输出文件名称，默认会在执行命令的目录生成一个名为“slt-output.a”的文件。
     -v: 打印版本信息
 
 Example：
@@ -43,61 +46,99 @@ Example：
     [3] {{.Command}} xxx.a yyy.a
     [4] {{.Command}} -o all_in_one.a xxx.a yyy.a
     [5] {{.Command}} -d -o all_in_one.a xxx.a yyy.a
+    [6] {{.Command}} -m exclude -p 'Pods.*-dummy.o' -o excluded.a xxx.a
 ============================================================================
 `
-	FLAG_OUTPUT_DEFAULT = "merged.a"
+	FLAG_OUTPUT_DEFAULT = "slt-output.a"
 	FLAG_DEBUG_DEFAULT  = false
 	FLAG_VERSION_DEFAULT = false
 	FLAG_HELP_DEFAULT = false
 )
 
-var flagMergedOutput string
+const (
+    MODE_MERGE = "merge"
+    MODE_EXCLUDE = "exclude"
+)
+
+var flagOutput string
 var flagDebug bool = FLAG_DEBUG_DEFAULT
 var flagVersion bool = FLAG_VERSION_DEFAULT
 var flagHelp bool = FLAG_HELP_DEFAULT
+var flagWorkMode string
+var flagPattern string
+
+var workMode string = MODE_MERGE    // 当前的工作模式
 var libs []LibraryInfo
 
 func init() {
-	flag.StringVar(&flagMergedOutput, "o", FLAG_OUTPUT_DEFAULT, "Output static file")
+	flag.StringVar(&flagOutput, "o", FLAG_OUTPUT_DEFAULT, "Output static file")
+    flag.StringVar(&flagWorkMode, "m", MODE_MERGE, "Work mode")
+    flag.StringVar(&flagPattern, "p", "", "Pattern")
 	flag.BoolVar(&flagDebug, "d", FLAG_DEBUG_DEFAULT, "Output debugging information")
 	flag.BoolVar(&flagVersion, "v", FLAG_VERSION_DEFAULT, "Print version info")
 	flag.BoolVar(&flagHelp, "h", FLAG_HELP_DEFAULT, "Print useage")
 }
 
 //
-// $slmt -o output.a intput_1.a intput_2.a input_3.a
+// $slt -o output.a intput_1.a intput_2.a input_3.a
 //
 func main() {
+    //  解析输入参数
 	flag.Parse()
 
+    // 如果包含 -h 参数则直接打印帮助信息，不论是否包含其他参数
 	if flagHelp {
 		printUsage()
 		return
 	}
 
+    // 如果包含 -v 参数则直接打印版本信息，不论是否还包含其他参数
 	if flagVersion {
 		printVersionInfo()
 		return
 	}
 
-	// 读取其余输入参数
+    // 获取工作模式
+    switch flagWorkMode {
+        case MODE_EXCLUDE:
+            workMode = MODE_EXCLUDE
+        case MODE_MERGE:
+            workMode = MODE_MERGE
+        default:
+            // ERROR 未知的工作模式
+            panic(fmt.Sprintf("Unknown work mode!! '%v'", flagWorkMode))
+    }
+    log("SLT (Static Library Tools) work in [%v] mode.", workMode)
+
+	// 读取其余输入参数，也就是，非flag部分的参数，一般是输入文件
 	inputFiles := flag.Args()
-	if len(inputFiles) == 0 {
-		printUsage()
-		return
-	}
 
 	// 检查input_files
 	if !checkInputFiles(inputFiles) {
 		return
 	}
 
-	// 开始合并工作
-	if merge(flagMergedOutput, libs) {
-		log("Success! Save to %v", flagMergedOutput)
-	} else {
-		log("Failed!")
-	}
+    // 根据所处的工作模式，开始相应的处理工作
+    switch workMode {
+    case MODE_MERGE:
+	    // 开始合并工作
+        if merge(libs, flagPattern, flagOutput) {
+            log("Success! Save to %v", flagOutput)
+        } else {
+            log("Failed!")
+        }
+    case MODE_EXCLUDE:
+        // 参数检查
+        if len(flagPattern) > 0 {
+            if merge(libs, flagPattern, flagOutput) {
+                log("Success! Save to %v", flagOutput)
+            } else {
+                log("Failed!")
+            }
+        } else {
+            panic("错误！请指定要被剔除的文件需要满足的模式，通过'-p'选项。")
+        }
+    }
 }
 
 // 验证输入文件可用性
@@ -116,11 +157,24 @@ func checkInputFiles(inputs []string) bool {
 	}
 
 	// 检查输入文件个数
-	if len(inputs) <= 1 { // input file 必须大于等于2个
-		log("错误: 至少需要包含2个输入文件")
+    switch len(inputs){
+    case 0:
+		log("错误: 没有输入文件")
 		printUsage()
 		return false
-	}
+    case 1:
+        if workMode == MODE_MERGE {
+		    log("错误: 没有足够的输入文件。在merge模式下需要至少2个输入文件。")
+            printUsage()
+            return false
+        }
+    default:
+        if workMode == MODE_EXCLUDE{
+		    log("错误: 输入文件过多。在exclude模式下仅支持1个输入文件。")
+            printUsage()
+            return false
+        }
+    }
 
 	// 检查输入文件有效性
 	for _, file := range inputs {
@@ -250,3 +304,4 @@ func debug(format string, args ...interface{}) {
 		log("DEBUG -> "+format, args...)
 	}
 }
+

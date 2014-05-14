@@ -14,8 +14,11 @@
 
 ## 用法:
     mergelibs [-dhov] <input_files>
-    输入文件数(input_files)需大于等于2个
 
+    -m: 工作模式
+        merge       合并多架构静态库。[默认]
+        exclude     排除指定文件。
+    -p: Pattern 用于指定需要排除哪些文件。当工作模式为exclude时，该参数有效。
     -d: 打印调试信息
     -h: 打印帮助信息
     -o <output>: 指定输出文件名称，默认会在执行命令的目录生成一个名为“merged.a”的文件
@@ -27,3 +30,4 @@
  3. $slt xxx.a yyy.a
  4. $slt -o all_in_one.a xxx.a yyy.a
  5. $slt -d -o all_in_one.a xxx.a yyy.a
+ 6. $slt -m exclude -p 'Pods.*-dummy.o' -o excluded.a xxx.a
