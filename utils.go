@@ -105,7 +105,7 @@ func isStaticLabrary(file string) bool {
 
 // 将每个CPU架构抽取出来
 func unarchive(src, target, arch string) {
-	_, err := syncExec("/bin/sh", fmt.Sprintf("%v -thin %v -o %v %v", getCommandPath(CMD_LIPO), arch, target, src))
+	_, err := syncExec("/bin/sh", "-c", fmt.Sprintf("%v -thin %v -o %v %v", getCommandPath(CMD_LIPO), arch, target, src))
 	if nil != err {
 		panic(err) // TODO
 	}
