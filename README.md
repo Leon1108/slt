@@ -13,7 +13,7 @@
 	* TODO
 
 ## 用法:
-    slt [-mpdhov] <input_files>
+    slt [-mpdhove] <input_files>
 
     -m: 工作模式
         merge       合并多架构静态库。[默认]
@@ -21,8 +21,9 @@
     -p: Pattern 用于指定需要排除哪些文件。当工作模式为exclude时，该参数有效。
     -d: 打印调试信息
     -h: 打印帮助信息
-    -o <output>: 指定输出文件名称，默认会在执行命令的目录生成一个名为“merged.a”的文件
+    -o <output>: 指定输出文件名称，默认会在执行命令的目录生成一个名为'slt-output.a'的文件
     -v: 打印版本信息
+    -e: 指定Xcode安装位置，默认为'/Applications/Xcode.app/'
 
 ## 例如：
  1. $slt -h

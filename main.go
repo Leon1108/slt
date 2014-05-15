@@ -5,15 +5,13 @@ import (
 	"fmt"
 	"flag"
 	"sort"
-	"bytes"
 	"errors"
 	"strings"
-	"os/exec"
     "text/template"
 )
 
 type AppInfo struct {
-    Command, Version string
+    Command, Version, XcodeDefault, OutputDefault string
 }
 
 type LibraryInfo struct {
@@ -37,8 +35,9 @@ Usage:
     -p: Pattern 用于指定需要排除哪些文件。当工作模式为exclude时，该参数有效。
     -d: 打印调试信息
     -h: 打印帮助信息
-    -o <output>: 指定输出文件名称，默认会在执行命令的目录生成一个名为“slt-output.a”的文件。
+    -o <output>: 指定输出文件名称，默认会在执行命令的目录生成一个名为'{{.OutputDefault}}'的文件。
     -v: 打印版本信息
+    -e: 指定Xcode安装位置，默认为'{{.XcodeDefault}}'
 
 Example：
     [1] {{.Command}} -h
@@ -53,6 +52,7 @@ Example：
 	FLAG_DEBUG_DEFAULT  = false
 	FLAG_VERSION_DEFAULT = false
 	FLAG_HELP_DEFAULT = false
+    FLAG_ENV_DEFAULT = "/Applications/Xcode.app/"
 )
 
 const (
@@ -66,8 +66,10 @@ var flagVersion bool = FLAG_VERSION_DEFAULT
 var flagHelp bool = FLAG_HELP_DEFAULT
 var flagWorkMode string
 var flagPattern string
+var flagEnv string  // Xcode 安装位置
 
 var workMode string = MODE_MERGE    // 当前的工作模式
+var xcodeCmdPath string     // Xcode命令行工具根目录
 var libs []LibraryInfo
 
 func init() {
@@ -77,6 +79,7 @@ func init() {
 	flag.BoolVar(&flagDebug, "d", FLAG_DEBUG_DEFAULT, "Output debugging information")
 	flag.BoolVar(&flagVersion, "v", FLAG_VERSION_DEFAULT, "Print version info")
 	flag.BoolVar(&flagHelp, "h", FLAG_HELP_DEFAULT, "Print useage")
+    flag.StringVar(&flagEnv, "e", FLAG_ENV_DEFAULT, "The root path where you install your Xcode.")
 }
 
 //
@@ -110,6 +113,13 @@ func main() {
     }
     log("SLT (Static Library Tools) work in [%v] mode.", workMode)
 
+    // 检查工作环境
+    xcodeCmdPath = flagEnv + CMDBASE
+    log("Commonds Path: %v", xcodeCmdPath)
+    if !checkEnvironment() {
+        panic("当前系统环境不支持此工具使用，请确保正确安装Xcode！如果Xcode没有安装在'/Applications' 目录下，请使用'-e'选项指定Xcode安装位置，如：\n\t$slt -e '/Users/UserName/Desktop/Xcode.app/' libXXX.a libYYY.a\n")
+    }
+
 	// 读取其余输入参数，也就是，非flag部分的参数，一般是输入文件
 	inputFiles := flag.Args()
 
@@ -141,6 +151,28 @@ func main() {
     }
 }
 
+// 检查当前运行环境，主要是检查Xcode是否正确安装
+func checkEnvironment() bool{
+    // 检查Xcode根目录是否存在
+    if !IsDirExist(flagEnv) {
+        errLog("指定的目录不存在！'%v'", flagEnv)
+        return false;
+    }
+
+    // 检查所有命令行工具是否存在
+    cmds := []string{CMD_AR, CMD_LIPO, CMD_LIBTOOL, CMD_OTOOL}
+    for _, v := range cmds {
+        cmdPath := xcodeCmdPath + v
+        if !IsFileExist(cmdPath) {
+            errLog("命令行工具'%v'没有找到！", cmdPath)
+            return false
+        } else {
+            debug("Command: [%v] Founded!", cmdPath)
+        }
+    }
+    return true;
+}
+
 // 验证输入文件可用性
 func checkInputFiles(inputs []string) bool {
 
@@ -149,7 +181,7 @@ func checkInputFiles(inputs []string) bool {
 	for _, v := range inputs {
 		_, ok := tmp[v]
 		if ok {
-			log("错误: 输入中包含相同的文件！%v", v)
+			errLog("错误: 输入中包含相同的文件！%v", v)
 			return false
 		} else {
 			tmp[v] = ""
@@ -159,18 +191,18 @@ func checkInputFiles(inputs []string) bool {
 	// 检查输入文件个数
     switch len(inputs){
     case 0:
-		log("错误: 没有输入文件")
+		errLog("错误: 没有输入文件")
 		printUsage()
 		return false
     case 1:
         if workMode == MODE_MERGE {
-		    log("错误: 没有足够的输入文件。在merge模式下需要至少2个输入文件。")
+		    errLog("错误: 没有足够的输入文件。在merge模式下需要至少2个输入文件。")
             printUsage()
             return false
         }
     default:
         if workMode == MODE_EXCLUDE{
-		    log("错误: 输入文件过多。在exclude模式下仅支持1个输入文件。")
+		    errLog("错误: 输入文件过多。在exclude模式下仅支持1个输入文件。")
             printUsage()
             return false
         }
@@ -181,13 +213,13 @@ func checkInputFiles(inputs []string) bool {
 		_, err := os.Open(file)
 		if nil != err {
 			// 打开文件失败
-			log("错误: 无法打开输入文件 '%v'", file)
+			errLog("错误: 无法打开输入文件 '%v'", file)
 			return false
 		} else {
 			// 检查输入的文件是否拥有相同的架构
 			archs, errArch := checkArchitecture(file)
 			if nil != errArch {
-				log("错误：输入文件格式错误！'%v' Error: %v", file, errArch)
+				errLog("错误：输入文件格式错误！'%v' Error: %v", file, errArch)
 				return false
 			} else {
 				// 构建library infos
@@ -221,9 +253,9 @@ func checkInputFiles(inputs []string) bool {
 		}
 		if joind != tmp {
 			// 架构不一致
-			log("错误：输入文件所包含的CPU架构不一致!")
+			errLog("错误：输入文件所包含的CPU架构不一致!")
 			for k, v := range libs {
-				log("      [%v] %v: %v", k+1, v.path, v.archs)
+				errLog("\t[%v] %v: %v", k+1, v.path, v.archs)
 			}
 			return false
 		}
@@ -242,7 +274,7 @@ func checkArchitecture(file string) (archInfos []string, err error) {
 	}
 
 	// 调用Lipo
-	out, err := syncExec("lipo", "-info", file)
+	out, err := syncExec("/bin/sh", "-c", fmt.Sprintf("%v -info %v", getCommandPath(CMD_LIPO), file))
 	if nil != err {
 		return
 	}
@@ -255,34 +287,9 @@ func checkArchitecture(file string) (archInfos []string, err error) {
 	return
 }
 
-func isStaticLabrary(file string) bool {
-	out, err := syncExec("otool", "-f", file)
-	if nil != err {
-		return false
-	}
-	if len(out) == 0 {
-		return false
-	}
-	return true
-}
-
-// 对Cmd.Run()的简单封装
-func syncExec(command string, args ...string) (stdOutput string, err error) {
-	var stdOut bytes.Buffer
-	cmd := exec.Command(command, args...)
-	debug("Exec: %v", cmd.Args)
-	cmd.Stdout = &stdOut
-	err = cmd.Run()
-	if nil != err {
-		return
-	}
-	stdOutput = string(stdOut.Bytes())
-	return
-}
-
 // 打印使用方法
 func printUsage() {
-    appInfo := AppInfo{CMD_NAME, VERSION}
+    appInfo := AppInfo{CMD_NAME, VERSION, FLAG_ENV_DEFAULT, FLAG_OUTPUT_DEFAULT}
     tmpl, err := template.New("usage").Parse(USAGE_TPL)
     if nil != err {panic(err)}
     err = tmpl.Execute(os.Stdout, appInfo)
@@ -297,6 +304,10 @@ func printVersionInfo(){
 // 日志
 func log(format string, args ...interface{}) {
 	fmt.Printf(format+"\n", args...)
+}
+
+func errLog(format string, args ...interface{}) {
+	fmt.Printf("ERROR -> " + format + "\n", args...)
 }
 
 func debug(format string, args ...interface{}) {
