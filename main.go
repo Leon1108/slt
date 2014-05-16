@@ -22,7 +22,7 @@ type LibraryInfo struct {
 
 const (
 	CMD_NAME = "slt"
-	VERSION	= "0.3.0"
+	VERSION	= "0.3.1"
 	USAGE_TPL = `
 {{.Command}} {{.Version}} -- Static Library Tools
 ============================================================================

@@ -33,7 +33,7 @@ func merge(libs []LibraryInfo, pattern, dest string) bool {
 		defer cleanTempDir(libTmpPath)
 
         // 将此Fat静态库的所有架构分别解压并拷贝所有.o文件到工作目录
-        extractAllArchs(lib, libTmpPath, workDir, "Pods.*-dummy.o")
+        extractAllArchs(lib, libTmpPath, workDir, pattern)
 	}
 
 	// libtool 生成静态库

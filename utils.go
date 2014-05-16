@@ -122,7 +122,7 @@ func extract(srcLib, targetDir string) {
 // 将所以符合<pattern>并且不符合<exclude>的文件从<src>目录拷贝到<dest>目录
 func copyAll(src, dest, pattern, exclude string) {
 	// 排除掉pods生成的 *dummy.o 文件
-	_, err := syncExec("/bin/sh", "-c", fmt.Sprintf("cp -rf `ls %v/%v | grep -E -v \"Pods-.*dummy.o\"` %v", src, pattern, dest))
+	_, err := syncExec("/bin/sh", "-c", fmt.Sprintf("cp -rf `ls %v/%v | grep -E -v \"%v\"` %v", src, pattern, exclude, dest))
 	if nil != err {
 		panic(err) // TODO
 	}
