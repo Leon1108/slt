@@ -316,3 +316,4 @@ func debug(format string, args ...interface{}) {
 	}
 }
 
+// vim: set expandtab ts=4 sts=4 sw=4 :
